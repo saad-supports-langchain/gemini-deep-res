@@ -3,5 +3,10 @@
   "graphs": {
     "deep_research": "./deep_research_graph.py:create_deep_research_graph_for_api"
   },
-  "env": ".env"
+  "env": {
+    "N_WORKERS": "2",
+    "N_JOBS_PER_WORKER": "40",
+    "BG_JOB_ISOLATED_LOOPS": "True",
+    "BG_JOB_TIMEOUT_SECS": "600"
+  }
 }
