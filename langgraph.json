@@ -8,9 +8,5 @@
     "N_JOBS_PER_WORKER": "40",
     "BG_JOB_ISOLATED_LOOPS": "True",
     "BG_JOB_TIMEOUT_SECS": "600",
-    "MOUNT_PREFIX": "/deepresearch"
-  },
-  "http": {
-    "mount_prefix": "/example-deployment-v1"
   }
 }

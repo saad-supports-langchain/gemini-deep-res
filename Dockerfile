@@ -25,4 +25,3 @@ RUN uv pip uninstall --system pip setuptools wheel && rm /usr/bin/uv /usr/bin/uv
 
 WORKDIR /deps/gemini-deep-research
 
-ENV MOUNT_PREFIX="/deepresearch"
