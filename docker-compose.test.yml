@@ -1,0 +1,118 @@
+# Docker Compose for testing special character handling in DATABASE_URI
+#
+# This file reproduces issues where special characters in PostgreSQL passwords
+# are not properly parsed in the DATABASE_URI connection string.
+#
+# =============================================================================
+# SUMMARY OF FINDINGS
+# =============================================================================
+#
+# PROBLEMATIC CHARACTERS (require URL encoding):
+#
+# | Character | Issue | URL Encoding |
+# |-----------|-------|--------------|
+# | @         | Interpreted as user:pass@host delimiter | %40 |
+# | /         | Path separator, triggers normalization  | %2F |
+# | ../       | Path traversal, completely breaks parsing | %2E%2E%2F |
+# | $         | May be interpreted as variable in some contexts | %24 |
+# | :         | Interpreted as host:port or user:pass delimiter | %3A |
+# | ?         | Query string delimiter | %3F |
+# | #         | Fragment delimiter | %23 |
+#
+# SAFE CHARACTERS (no encoding needed):
+# | Character | Notes |
+# |-----------|-------|
+# | .         | Safe by itself |
+# | ..        | Safe (without following /) |
+# | -         | Safe |
+# | _         | Safe |
+#
+# =============================================================================
+# TEST RESULTS
+# =============================================================================
+#
+# TEST 1: Unencoded @ in password
+#   URI: postgres://user:test..@$pass@host:5432/db
+#   Error: "failed to resolve host '$pass@host': Name or service not known"
+#   Cause: @ is interpreted as credentials/host delimiter
+#
+# TEST 2: Unencoded ../ in password
+#   URI: postgres://user:test../pass@host:5432/db
+#   Error: "invalid port ':test..' after host"
+#   Cause: ../ triggers path normalization, mangles entire URI structure
+#
+# TEST 3: URL-encoded password (WORKS)
+#   URI: postgres://user:test..%40%24pass@host:5432/db
+#   Result: Successfully connects and applies migrations
+#
+# =============================================================================
+
+volumes:
+  langgraph-data:
+    driver: local
+
+services:
+  langgraph-redis:
+    image: redis:6
+    healthcheck:
+      test: redis-cli ping
+      interval: 5s
+      timeout: 1s
+      retries: 5
+
+  langgraph-postgres:
+    image: postgres:16
+    ports:
+      - "5433:5432"  # Use 5433 to avoid conflicts with local postgres
+    environment:
+      POSTGRES_DB: langgraph
+      POSTGRES_USER: langgraph
+      # Password with special chars: test../pass
+      POSTGRES_PASSWORD: "test../pass"
+    volumes:
+      - langgraph-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U langgraph
+      start_period: 10s
+      timeout: 1s
+      retries: 5
+      interval: 5s
+
+  langgraph-api:
+    image: gemini-deep-research:latest
+    ports:
+      - "8123:8000"
+    depends_on:
+      langgraph-redis:
+        condition: service_healthy
+      langgraph-postgres:
+        condition: service_healthy
+    environment:
+      REDIS_URI: redis://langgraph-redis:6379
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-test-key-placeholder}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+
+      # ============================================================
+      # TEST CASE 1: UNENCODED @ IN PASSWORD (FAILS)
+      # ============================================================
+      # Uncomment to test:
+      # DATABASE_URI: postgres://langgraph:test..@$$pass@langgraph-postgres:5432/langgraph?sslmode=disable
+      #
+      # Error: "failed to resolve host '$pass@langgraph-postgres'"
+      # The @ splits credentials incorrectly.
+
+      # ============================================================
+      # TEST CASE 2: UNENCODED ../ IN PASSWORD (FAILS)
+      # ============================================================
+      # Change POSTGRES_PASSWORD to "test../pass" and uncomment:
+      # DATABASE_URI: postgres://langgraph:test../pass@langgraph-postgres:5432/langgraph?sslmode=disable
+      #
+      # Error: "invalid port ':test..' after host"
+      # Path traversal ../ completely mangles the URI.
+
+      # ============================================================
+      # TEST CASE 3: URL-ENCODED PASSWORD (WORKS)
+      # ============================================================
+      # Password: test../pass
+      # URL encoding: / -> %2F (only the / needs encoding, .. is safe)
+      DATABASE_URI: postgres://langgraph:test..%2Fpass@langgraph-postgres:5432/langgraph?sslmode=disable

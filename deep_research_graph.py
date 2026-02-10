@@ -241,7 +241,13 @@ Ensure your thinking is thorough but concise, and your response is well-structur
         """
         # Get the stream writer from context
         writer = get_stream_writer()
-        
+
+        # Emit a status event to keep the heartbeat alive during LLM init
+        writer(AIMessageChunk(content=[self._create_content_block(
+            "Initializing research planner...",
+            {"user_facing": True, "fetch": False, "is_last": False, "node_name": "generate_plan"}
+        )]))
+
         # Ensure LLM is initialized without blocking
         llm = await self._ensure_llm_initialized()
 
@@ -359,17 +365,23 @@ Ensure your thinking is thorough but concise, and your response is well-structur
         """
         # Get the stream writer from context
         writer = get_stream_writer()
-        
+
         current_step = state.get("current_step", 0)
         research_plan = state.get("research_plan", [])
 
         if current_step >= len(research_plan):
             return Command(update={})
 
+        current_step_name = research_plan[current_step]
+
+        # Emit a status event to keep the heartbeat alive during LLM init
+        writer(AIMessageChunk(content=[self._create_content_block(
+            f"Starting research step: {current_step_name}",
+            {"user_facing": True, "fetch": False, "is_last": False, "node_name": "research_step", "step_number": current_step + 1}
+        )]))
+
         # Ensure LLM is initialized without blocking
         llm = await self._ensure_llm_initialized()
-
-        current_step_name = research_plan[current_step]
 
         context = f"""
         Research Query: {state.get('query', '')}
@@ -486,7 +498,13 @@ Ensure your thinking is thorough but concise, and your response is well-structur
         """
         # Get the stream writer from context
         writer = get_stream_writer()
-        
+
+        # Emit a status event to keep the heartbeat alive during LLM init
+        writer(AIMessageChunk(content=[self._create_content_block(
+            "Synthesizing final report...",
+            {"user_facing": True, "fetch": False, "is_last": False, "node_name": "synthesize_report"}
+        )]))
+
         # Ensure LLM is initialized without blocking
         llm = await self._ensure_llm_initialized()
 
