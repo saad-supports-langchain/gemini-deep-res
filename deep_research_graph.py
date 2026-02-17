@@ -663,31 +663,11 @@ def create_deep_research_graph():
 def create_deep_research_graph_for_api():
     """Factory function to create a deep research graph instance for LangGraph API.
 
-    Returns a context manager that propagates distributed trace context
-    from the client (e.g. RemoteGraph with distributed_tracing=True)
-    so that the graph's execution appears as a child trace in LangSmith.
+    Returns a compiled graph for the LangGraph platform. Distributed trace
+    context propagation is handled automatically by the platform when using
+    RemoteGraph with distributed_tracing=True.
     """
-    import contextlib
-    import langsmith as ls
-
-    compiled_graph = DeepResearchGraph()._build_graph_for_langgraph_api()
-
-    @contextlib.asynccontextmanager
-    async def graph(config):
-        configurable = config.get("configurable", {})
-        parent_trace = configurable.get("langsmith-trace")
-        parent_project = configurable.get("langsmith-project")
-        metadata = configurable.get("langsmith-metadata")
-        tags = configurable.get("langsmith-tags")
-        with ls.tracing_context(
-            parent=parent_trace,
-            project_name=parent_project,
-            metadata=metadata,
-            tags=tags,
-        ):
-            yield compiled_graph
-
-    return graph
+    return DeepResearchGraph()._build_graph_for_langgraph_api()
 
 def create_initial_state_for_api(query: str, research_depth: int = 1) -> dict:
     """Create a properly formatted initial state for API calls"""
