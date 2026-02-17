@@ -57,7 +57,7 @@ class DeepResearchGraph:
 
     def __init__(
         self,
-        model_name: str = "gemini-2.5-pro",
+        model_name: str = "gemini-2.5-flash",
         temperature: float = 0.7,
         use_langsmith_prompts: bool = False,
         prompt_manager: Optional["PromptManager"] = None,
@@ -87,7 +87,8 @@ class DeepResearchGraph:
             self._llm = await asyncio.to_thread(
                 ChatGoogleGenerativeAI,
                 model=self.model_name,
-                temperature=self.temperature
+                temperature=self.temperature,
+                max_output_tokens=500,
             )
         return self._llm
 
@@ -97,76 +98,26 @@ class DeepResearchGraph:
         if self._llm is None:
             self._llm = ChatGoogleGenerativeAI(
                 model=self.model_name,
-                temperature=self.temperature
+                temperature=self.temperature,
+                max_output_tokens=500,
             )
         return self._llm
         
-    def _create_thinking_prompt(self, context: str, task: str) -> str:
-        """Create a prompt that encourages thinking and summary generation"""
-        
+    def _create_prompt(self, context: str, task: str) -> str:
+        """Create a concise direct prompt"""
+
         if self.prompt_manager:
             prompt_template = self.prompt_manager.get_prompt(
                 "thinking-prompt",
-                fallback=self._get_default_thinking_prompt()
+                fallback="You are a research assistant.\n\nContext: {context}\n\nTask: {task}\n\nBe concise."
             )
-            
+
             try:
                 return prompt_template.format(context=context, task=task)
             except Exception as e:
                 logging.warning(f"Failed to format LangSmith prompt: {e}")
-                return self._get_default_thinking_prompt_formatted(context, task)
-        
-        return self._get_default_thinking_prompt_formatted(context, task)
-    
-    def _get_default_thinking_prompt(self) -> str:
-        """Get the default thinking prompt template"""
-        return """You are a research assistant with advanced reasoning capabilities.
 
-Context: {context}
-
-Task: {task}
-
-Please provide your response in the following format:
-
-<THINKING>
-Briefly outline your thinking process, key considerations, and reasoning steps.
-Include:
-1. What approach you're taking
-2. Key insights or patterns you notice
-3. Any uncertainties or areas needing clarification
-4. Your confidence level (0-1)
-</THINKING>
-
-<RESPONSE>
-Your actual response to the task
-</RESPONSE>
-
-Ensure your thinking is thorough but concise, and your response is well-structured."""
-    
-    def _get_default_thinking_prompt_formatted(self, context: str, task: str) -> str:
-        """Get the default thinking prompt with context and task filled in"""
-        return f"""You are a research assistant with advanced reasoning capabilities.
-
-Context: {context}
-
-Task: {task}
-
-Please provide your response in the following format:
-
-<THINKING>
-Briefly outline your thinking process, key considerations, and reasoning steps.
-Include:
-1. What approach you're taking
-2. Key insights or patterns you notice
-3. Any uncertainties or areas needing clarification
-4. Your confidence level (0-1)
-</THINKING>
-
-<RESPONSE>
-Your actual response to the task
-</RESPONSE>
-
-Ensure your thinking is thorough but concise, and your response is well-structured."""
+        return f"You are a research assistant.\n\nContext: {context}\n\nTask: {task}\n\nBe concise."
 
     def _create_content_block(self, content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Create a content block with text and metadata"""
@@ -176,57 +127,15 @@ Ensure your thinking is thorough but concise, and your response is well-structur
             "metadata": metadata
         }
     
-    def _parse_thinking_response(self, response: str, step_name: str) -> tuple[str, ThinkingSummary]:
-        """Parse the thinking and response sections from LLM output"""
-        thinking_match = response.find("<THINKING>")
-        response_match = response.find("<RESPONSE>")
-        
-        if thinking_match == -1 or response_match == -1:
-            # Fallback if parsing fails
-            return response, ThinkingSummary(
-                step=step_name,
-                reasoning="Failed to parse thinking section",
-                key_insights=[],
-                confidence=0.5,
-                timestamp=datetime.now().isoformat()
-            )
-        
-        thinking_start = thinking_match + len("<THINKING>")
-        thinking_end = response.find("</THINKING>")
-        response_start = response_match + len("<RESPONSE>")
-        response_end = response.find("</RESPONSE>")
-        
-        thinking_content = response[thinking_start:thinking_end].strip()
-        response_content = response[response_start:response_end].strip()
-        
-        # Extract key insights and confidence from thinking
-        insights = []
-        confidence = 0.7
-        
-        # Simple extraction logic
-        lines = thinking_content.split('\n')
-        for line in lines:
-            if any(keyword in line.lower() for keyword in ['insight:', 'key:', 'important:', 'finding:']):
-                insights.append(line.strip())
-            if 'confidence' in line.lower():
-                try:
-                    # Look for decimal number in confidence line
-                    import re
-                    conf_match = re.search(r'[\d.]+', line)
-                    if conf_match:
-                        confidence = float(conf_match.group())
-                except:
-                    pass
-        
-        thinking_summary = ThinkingSummary(
+    def _make_thinking_summary(self, response: str, step_name: str) -> ThinkingSummary:
+        """Create a thinking summary from the raw LLM response"""
+        return ThinkingSummary(
             step=step_name,
-            reasoning=thinking_content,
-            key_insights=insights or [thinking_content[:200]],  # Fallback to first 200 chars
-            confidence=confidence,
+            reasoning=response[:200],
+            key_insights=[response[:200]],
+            confidence=0.7,
             timestamp=datetime.now().isoformat()
         )
-        
-        return response_content, thinking_summary
 
     async def _generate_research_plan(
         self,
@@ -252,11 +161,10 @@ Ensure your thinking is thorough but concise, and your response is well-structur
         llm = await self._ensure_llm_initialized()
 
         context = f"Research query: {state['query']}"
-        research_depth = state.get('research_depth', 3)
-        task = f"Create a detailed research plan with {research_depth} levels of depth. " \
-               f"Break this down into specific research steps that will help gather comprehensive information."
+        research_depth = state.get('research_depth', 1)
+        task = f"Create a research plan with exactly {research_depth} numbered steps. Only output the numbered list, nothing else."
 
-        prompt = self._create_thinking_prompt(context, task)
+        prompt = self._create_prompt(context, task)
 
         accumulated_content = ""
         content_blocks = []
@@ -282,20 +190,20 @@ Ensure your thinking is thorough but concise, and your response is well-structur
                 # Stream the message chunk with content block
                 writer(AIMessageChunk(content=[content_block]))
 
-            # Parse the complete response
-            response_content, thinking_summary = self._parse_thinking_response(
-                accumulated_content, "research_planning"
-            )
+            # Create thinking summary from raw response
+            thinking_summary = self._make_thinking_summary(accumulated_content, "research_planning")
 
-            # Parse research steps from response
+            # Parse research steps from response, capped to research_depth
             steps = []
-            lines = response_content.split('\n')
+            lines = accumulated_content.split('\n')
             for line in lines:
                 if any(line.strip().startswith(f"{i}.") for i in range(1, 20)):
                     steps.append(line.strip())
+                    if len(steps) >= research_depth:
+                        break
 
             if not steps:  # Fallback
-                steps = ["Initial research", "Analysis", "Synthesis", "Final report"]
+                steps = ["Research and analysis"]
 
             # Store the research plan (if store is available)
             if store is not None:
@@ -383,14 +291,13 @@ Ensure your thinking is thorough but concise, and your response is well-structur
         # Ensure LLM is initialized without blocking
         llm = await self._ensure_llm_initialized()
 
-        context = f"""
-        Research Query: {state.get('query', '')}
-        Current Step: {current_step_name}
-        Previous Findings: {json.dumps(state.get('findings', []), indent=2)}
-        """
+        # Only include the last finding to keep context small
+        findings = state.get('findings', [])
+        last_finding = findings[-1]["content"][:300] if findings else "None yet"
+        context = f"Query: {state.get('query', '')}\nPrevious finding: {last_finding}"
 
-        task = f"Execute this research step thoroughly. Focus on: {current_step_name}"
-        prompt = self._create_thinking_prompt(context, task)
+        task = f"Research: {current_step_name}"
+        prompt = self._create_prompt(context, task)
 
         accumulated_content = ""
         content_blocks = []
@@ -418,14 +325,12 @@ Ensure your thinking is thorough but concise, and your response is well-structur
                 # Stream the message chunk with content block
                 writer(AIMessageChunk(content=[content_block]))
 
-            # Parse the complete response
-            response_content, thinking_summary = self._parse_thinking_response(
-                accumulated_content, current_step_name
-            )
+            # Create thinking summary from raw response
+            thinking_summary = self._make_thinking_summary(accumulated_content, current_step_name)
 
             new_finding = {
                 "step": current_step_name,
-                "content": response_content,
+                "content": accumulated_content,
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -508,17 +413,15 @@ Ensure your thinking is thorough but concise, and your response is well-structur
         # Ensure LLM is initialized without blocking
         llm = await self._ensure_llm_initialized()
 
-        context = f"""
-        Original Query: {state.get('query', '')}
-        Research Plan: {json.dumps(state.get('research_plan', []), indent=2)}
-        All Findings: {json.dumps(state.get('findings', []), indent=2)}
-        Thinking Summaries: {[s.reasoning for s in state.get('thinking_summaries', [])]}
-        """
+        # Only include finding content, not full metadata or thinking summaries
+        findings_text = "\n---\n".join(
+            f["content"][:500] for f in state.get('findings', [])
+        )
+        context = f"Query: {state.get('query', '')}\nFindings:\n{findings_text}"
 
-        task = "Synthesize all the research findings into a comprehensive final report. " \
-               "Include key insights, conclusions, and any recommendations. Make it well-structured and detailed."
+        task = "Synthesize findings into a concise final report with key insights and conclusions."
 
-        prompt = self._create_thinking_prompt(context, task)
+        prompt = self._create_prompt(context, task)
 
         accumulated_content = ""
         content_blocks = []
@@ -544,10 +447,8 @@ Ensure your thinking is thorough but concise, and your response is well-structur
                 # Stream the message chunk with content block
                 writer(AIMessageChunk(content=[content_block]))
 
-            # Parse the complete response
-            response_content, thinking_summary = self._parse_thinking_response(
-                accumulated_content, "final_synthesis"
-            )
+            response_content = accumulated_content
+            thinking_summary = self._make_thinking_summary(accumulated_content, "final_synthesis")
 
             # Store the final report (if store is available)
             if store is not None:
@@ -663,7 +564,7 @@ Ensure your thinking is thorough but concise, and your response is well-structur
         # For LangGraph API deployment, don't use custom checkpointer
         return workflow.compile()
 
-    async def run_research(self, query: str, research_depth: int = 3, thread_id: Optional[str] = None) -> Dict[str, Any]:
+    async def run_research(self, query: str, research_depth: int = 1, thread_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Run a complete research task with thinking summaries (async).
 
@@ -729,7 +630,7 @@ async def main():
     print("=" * 80)
 
     # Run the research asynchronously
-    results = await research_graph.run_research(query, research_depth=4)
+    results = await research_graph.run_research(query, research_depth=1)
 
     # Display results
     print(f"\nFinal Research Report:")
@@ -760,11 +661,35 @@ def create_deep_research_graph():
     return DeepResearchGraph().graph
 
 def create_deep_research_graph_for_api():
-    """Factory function to create a deep research graph instance for LangGraph API"""
-    instance = DeepResearchGraph()
-    return instance._build_graph_for_langgraph_api()
+    """Factory function to create a deep research graph instance for LangGraph API.
 
-def create_initial_state_for_api(query: str, research_depth: int = 3) -> dict:
+    Returns a context manager that propagates distributed trace context
+    from the client (e.g. RemoteGraph with distributed_tracing=True)
+    so that the graph's execution appears as a child trace in LangSmith.
+    """
+    import contextlib
+    import langsmith as ls
+
+    compiled_graph = DeepResearchGraph()._build_graph_for_langgraph_api()
+
+    @contextlib.asynccontextmanager
+    async def graph(config):
+        configurable = config.get("configurable", {})
+        parent_trace = configurable.get("langsmith-trace")
+        parent_project = configurable.get("langsmith-project")
+        metadata = configurable.get("langsmith-metadata")
+        tags = configurable.get("langsmith-tags")
+        with ls.tracing_context(
+            parent=parent_trace,
+            project_name=parent_project,
+            metadata=metadata,
+            tags=tags,
+        ):
+            yield compiled_graph
+
+    return graph
+
+def create_initial_state_for_api(query: str, research_depth: int = 1) -> dict:
     """Create a properly formatted initial state for API calls"""
     return {
         "query": query,

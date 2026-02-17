@@ -7,6 +7,7 @@
     "N_WORKERS": "2",
     "N_JOBS_PER_WORKER": "40",
     "BG_JOB_ISOLATED_LOOPS": "True",
-    "BG_JOB_TIMEOUT_SECS": "600"
+    "BG_JOB_TIMEOUT_SECS": "600",
+    "LANGSMITH_TRACING": "true"
   }
 }
