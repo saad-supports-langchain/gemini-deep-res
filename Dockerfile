@@ -9,7 +9,7 @@ ADD . /deps/gemini-deep-research
 # -- Installing all local dependencies --
 RUN PYTHONDONTWRITEBYTECODE=1 uv pip install --system --prerelease=allow --no-cache-dir -c /api/constraints.txt -e /deps/*
 # -- End of local dependencies install --
-ENV LANGSERVE_GRAPHS='{"deep_research": "/deps/gemini-deep-research/deep_research_graph.py:create_deep_research_graph_for_api"}'
+ENV LANGSERVE_GRAPHS='{"deep_research": "/deps/gemini-deep-research/deep_research_graph.py:deep_research_graph_for_api"}'
 
 
 
