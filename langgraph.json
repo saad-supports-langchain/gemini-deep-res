@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "deep_research": "./deep_research_graph.py:create_deep_research_graph_for_api"
+    "deep_research": "./deep_research_graph.py:deep_research_graph_for_api"
   },
   "env": {
     "N_WORKERS": "2",

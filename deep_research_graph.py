@@ -683,12 +683,6 @@ def create_initial_state_for_api(query: str, research_depth: int = 1) -> dict:
     }
 
 # Create default graph instances for LangGraph configuration
-try:
-    deep_research_graph = create_deep_research_graph()
-    deep_research_graph_for_api = create_deep_research_graph_for_api()
-except Exception as e:
-    # If initialization fails (e.g., no API key), create placeholders
-    import warnings
-    warnings.warn(f"Could not initialize default graphs: {e}. Graphs will be initialized when needed.")
-    deep_research_graph = None
-    deep_research_graph_for_api = None
+# LLM is lazily initialized, so graph compilation should always succeed.
+deep_research_graph = create_deep_research_graph()
+deep_research_graph_for_api = create_deep_research_graph_for_api()
