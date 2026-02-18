@@ -7,7 +7,7 @@ name = "deep-research-langgraph"
 version = "0.1.0"
 description = "Deep research implementation using LangGraph with Gemini 2.5 and thinking summaries"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Saad", email = "saad@langchain.dev"},
@@ -18,17 +18,16 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 dependencies = [
-    "langgraph>=0.6.0",
-    "langchain-core>=0.3.76",
-    "langchain-google-genai>=2.0.0",
+    "langgraph>=1.0.0",
+    "langchain-core>=1.0.0",
+    "langchain-google-genai>=2.1.0",
+    "deepagents>=0.4.0",
     "pydantic>=2.9.2",
     "python-dotenv>=1.0.1",
     "langgraph-cli>=0.4.3",
@@ -58,7 +57,7 @@ include = ["deep_research_graph*"]
 
 [tool.black]
 line-length = 88
-target-version = ['py39']
+target-version = ['py311']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -81,7 +80,7 @@ line_length = 88
 known_first_party = ["deep_research_graph"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
