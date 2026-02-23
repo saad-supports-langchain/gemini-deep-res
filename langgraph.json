@@ -9,6 +9,5 @@
     "BG_JOB_ISOLATED_LOOPS": "True",
     "BG_JOB_TIMEOUT_SECS": "600",
     "LANGSMITH_TRACING": "true"
-  },
-  "python_version": "3.14"
+  }
 }
